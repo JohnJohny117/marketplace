@@ -1,0 +1,146 @@
+//- Шаблон страницы панели администратора
+extends layout
+
+block content
+  h2 Панель администратора
+
+  // Контейнер для таблицы
+  .categories-container
+    // Таблица будет заполнена через JavaScript
+    table#categories-table(style="display: none;")
+      thead
+        tr
+          th Название категории
+          th Действия
+      tbody
+    .loading-message Загрузка категорий...
+    .error-message(style="color: red; display: none;") Ошибка загрузки категорий.
+
+  // Кнопка добавления новой категории (ведёт на отдельную страницу)
+  .actions
+    a.button.add-category-btn(href=`/category/add-form/${sessionId}`) Добавить категорию
+
+  // Кнопка выхода (обрабатывается через JavaScript)
+  .actions
+    button.button#logoutBtn ВЫХОД
+
+  script.
+    // Получение идентификатора сессии из шаблона
+    const sessionId = '#{sessionId}';
+
+    // Определение асинхронной функции для загрузки категорий через API
+    async function loadCategories() {
+      // Получение элементов DOM: таблица, тело таблицы, блок загрузки, блок ошибок
+      const table = document.getElementById('categories-table');
+      const tbody = table.querySelector('tbody');
+      const loadingDiv = document.querySelector('.loading-message');
+      const errorDiv = document.querySelector('.error-message');
+
+      try {
+        // Выполнение GET-запроса к API /category/:sessionId
+        const response = await fetch(`/category/${sessionId}`);
+        // Проверка успешности ответа (статус 200-299)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        // Преобразование ответа в JSON (массив категорий)
+        const categories = await response.json();
+
+        // Очищение содержимого tbody (удаление старых строк, если есть)
+        tbody.innerHTML = '';
+        // Заполнение таблицы новыми данными
+        categories.forEach(cat => {
+          // Создание новой строки
+          const row = tbody.insertRow();
+          // Вставка ячейки с названием категории
+          const cellTitle = row.insertCell(0);
+          // Вставка ячейки с кнопками действий
+          const cellActions = row.insertCell(1);
+          // Установка текста ячейки названия
+          cellTitle.textContent = cat.title;
+          // Установка HTML содержимого ячейки действий (две кнопки)
+          cellActions.innerHTML = `
+            <button class="button edit-btn" data-id="${cat.id}">Изменить</button>
+            <button class="button delete-btn" data-id="${cat.id}">Удалить</button>
+          `;
+        });
+        
+        // Назначение обработчиков клика для всех кнопок "Изменить"
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            // Получение ID категории из data-атрибута
+            const categoryId = btn.getAttribute('data-id');
+            // Переход на страницу редактирования категории
+            window.location.href = `/category/edit-form/${sessionId}/${categoryId}`;
+          });
+        });
+        
+        // Назначение обработчиков клика для всех кнопок "Удалить"
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            // Получение ID категории
+            const categoryId = btn.getAttribute('data-id');
+            // Запрос подтверждения у пользователя
+            const confirmed = confirm('Вы уверены, что хотите удалить эту категорию?');
+            if (!confirmed) return; // Выход, если пользователь отменил
+
+            try {
+              // Отправка POST-запроса на удаление категории
+              const response = await fetch(`/category/delete/${sessionId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: categoryId })
+              });
+              // Парсинг JSON-ответа
+              const data = await response.json();
+              if (response.ok) {
+                // Удаление строки таблицы, соответствующей удалённой категории
+                btn.closest('tr').remove();
+              } else {
+                // Отображение ошибки, возвращённой сервером
+                alert(data.error || 'Ошибка при удалении категории');
+              }
+            } catch (err) {
+              // Логирование ошибки в консоль
+              console.error(err);
+              // Уведомление пользователя о сетевой проблеме
+              alert('Ошибка соединения с сервером');
+            }
+          });
+        });
+
+        // Отображение таблицы (ранее она была скрыта)
+        table.style.display = 'table';
+        // Скрытие индикатора загрузки
+        loadingDiv.style.display = 'none';
+        // Скрытие блока ошибок (если был виден)
+        errorDiv.style.display = 'none';
+      } catch (err) {
+        // Логирование ошибки
+        console.error(err);
+        // Скрытие индикатора загрузки
+        loadingDiv.style.display = 'none';
+        // Отображение блока ошибок
+        errorDiv.style.display = 'block';
+        // Установка текста ошибки
+        errorDiv.textContent = 'Ошибка загрузки категорий. Попробуйте позже.';
+      }
+    }
+
+    // Запуск загрузки категорий после загрузки DOM
+    loadCategories();
+
+    // Кнопка выхода
+    const logoutBtn = document.getElementById('logoutBtn');
+    logoutBtn.addEventListener('click', async () => {
+      const url = `/auth/logout/${sessionId}`;
+      try {
+        const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        if (response.ok) {
+          window.location.replace('/login');
+        } else {
+          const data = await response.json();
+          alert(data.error || 'Ошибка при выходе');
+        }
+      } catch (err) {
+        alert('Ошибка соединения с сервером');
+      }
+    });

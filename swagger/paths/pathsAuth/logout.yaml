@@ -1,0 +1,38 @@
+paths:
+  /auth/logout/{sessionId}:
+    post:
+      summary: Выход пользователя (деактивация сессии)
+      tags: [Auth]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Идентификатор сессии (UUID)
+      responses:
+        200:
+          description: Выход выполнен успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutSuccessResponse'
+        401:
+          description: Сессия неактивна (уже деактивирована)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Сессия не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

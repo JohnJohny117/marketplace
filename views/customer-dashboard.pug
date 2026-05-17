@@ -1,0 +1,49 @@
+//- Шаблон страницы панели заказчика
+//- Расширяет базовый макет layout.pug, подставляя содержимое в блок content
+extends layout
+
+block content
+  //- Заголовок страницы
+  h2 Панель заказчика
+
+  //- Контейнер для кнопок-действий
+  .actions
+    //- Ссылка на страницу создания заказа; sessionId передаётся из маршрута
+    a.button(href=`/dashboard/${sessionId}/create-order`) Создать заказ
+    //- Ссылка на страницу списка заказов
+    a.button(href=`/dashboard/${sessionId}/my-orders`) Мои заказы
+    //- Кнопка выхода – будет обрабатываться JavaScript'ом
+    button.button#logoutBtn ВЫХОД
+
+  //- Клиентский скрипт, обеспечивающий выход через API
+  script.
+    // Переменная sessionId из шаблона интерполируется в строку и становится доступной в скрипте
+    const sessionId = '#{sessionId}';
+    // Находим кнопку выхода по её id
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    // Добавляем обработчик клика
+    logoutBtn.addEventListener('click', async () => {
+      // Формируем URL для API-эндпоинта выхода, подставляя sessionId
+      const url = `/auth/logout/${sessionId}`;
+      try {
+        // Отправляем POST-запрос на сервер
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        // Если ответ успешный (статус 2xx)
+        if (response.ok) {
+          // Перенаправляем на страницу входа, заменяя текущую запись в истории
+          window.location.replace('/login');
+        } else {
+          // Если ошибка, пытаемся прочитать JSON с сообщением и показать его
+          const data = await response.json();
+          alert(data.error || 'Ошибка при выходе');
+        }
+      } catch (err) {
+        // Сетевая ошибка или ошибка разбора ответа
+        alert('Ошибка соединения с сервером');
+      }
+    });

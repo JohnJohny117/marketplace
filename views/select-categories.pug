@@ -1,0 +1,164 @@
+//- Шаблон страницы выбора категорий для исполнителя
+//- Расширение базового макета layout.pug
+extends layout
+
+block content
+  //- Заголовок страницы
+  h2 Выбрать категории
+
+  //- Блок для вывода ошибок, переданных при рендере (например, после неудачной отправки)
+  if error
+    .error-message(style="color: red;")= error
+
+  //- Контейнер кастомного мультиселекта
+  .custom-multiselect
+    //- Верхняя часть: поле для отображения выбранных категорий и кнопка-переключатель
+    .multiselect-header
+      input(type="text" id="selectedDisplay" placeholder="Выберите категории" readonly)
+      button(type="button" id="dropdownToggle") ▼
+    //- Выпадающий блок со списком чекбоксов
+    .multiselect-dropdown#dropdownList
+      .dropdown-content
+        .loading-message Загрузка категорий...
+
+  //- Блок кнопок: Отмена (ссылка на панель исполнителя) и Сохранить
+  .actions
+    a.button.cancel-btn(href=`/dashboard/${sessionId}`) Отмена
+    button.button#saveBtn Сохранить
+
+  //- Клиентский скрипт
+  script.
+    // Получение идентификатора сессии из шаблона
+    const sessionId = '#{sessionId}';
+    // Переменные для хранения всех категорий и ID уже выбранных
+    let allCategories = [];
+    let selectedCategoryIds = [];
+
+    // Получение элементов DOM
+    const toggleBtn = document.getElementById('dropdownToggle');
+    const dropdown = document.getElementById('dropdownList');
+    const selectedDisplay = document.getElementById('selectedDisplay');
+    const saveBtn = document.getElementById('saveBtn');
+    const dropdownContent = document.querySelector('.dropdown-content');
+
+    // Функция загрузки данных: всех категорий и выбранных исполнителем
+    async function loadData() {
+      try {
+        // Параллельное выполнение двух GET-запросов (Promise.all)
+        const [allResponse, selectedResponse] = await Promise.all([
+          fetch(`/category/${sessionId}`),           // Запрос всех неудалённых категорий
+          fetch(`/category/selected/${sessionId}`)   // Запрос уже выбранных исполнителем категорий
+        ]);
+        // Проверка успешности ответов (статус 2xx)
+        if (!allResponse.ok) throw new Error(`HTTP ${allResponse.status}`);
+        if (!selectedResponse.ok) throw new Error(`HTTP ${selectedResponse.status}`);
+        
+        // Парсинг JSON-ответов
+        const all = await allResponse.json();
+        const selected = await selectedResponse.json();
+        
+        // Сохранение данных в глобальные переменные
+        allCategories = all;
+        selectedCategoryIds = selected.map(cat => cat.id);
+        
+        // Отрисовка чекбоксов с учётом предвыбора
+        renderCheckboxes();
+      } catch (err) {
+        // Обработка ошибок: вывод сообщения в консоль и на страницу
+        console.error(err);
+        dropdownContent.innerHTML = '<div class="error-message">Ошибка загрузки категорий</div>';
+      }
+    }
+
+    // Построение списка чекбоксов
+    function renderCheckboxes() {
+      // Очищение содержимого контейнера
+      dropdownContent.innerHTML = '';
+      // Проверка: есть ли хотя бы одна категория
+      if (!allCategories.length) {
+        dropdownContent.innerHTML = '<div class="loading-message">Нет категорий</div>';
+        return;
+      }
+      // Перебор всех категорий и создание чекбоксов
+      allCategories.forEach(cat => {
+        const label = document.createElement('label');
+        label.className = 'checkbox-option';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = cat.id;
+        checkbox.name = 'category';
+        // Если ID категории есть в списке выбранных – установка флага checked
+        if (selectedCategoryIds.includes(cat.id)) {
+          checkbox.checked = true;
+        }
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(' ' + cat.title));
+        dropdownContent.appendChild(label);
+      });
+      // Обновление текстового поля с выбранными значениями
+      updateSelectedDisplay();
+    }
+
+    // Обновление отображения выбранных категорий в поле ввода
+    function updateSelectedDisplay() {
+      // Поиск всех отмеченных чекбоксов
+      const checkboxes = document.querySelectorAll('#dropdownList input[type="checkbox"]:checked');
+      // Получение текстовых меток выбранных категорий
+      const selectedNames = Array.from(checkboxes).map(cb => {
+        const label = cb.closest('label');
+        return label ? label.textContent.trim() : '';
+      });
+      // Запись имён в поле ввода через запятую
+      selectedDisplay.value = selectedNames.join(', ');
+    }
+
+    // Открытие/закрытие выпадающего списка при клике на кнопку ▼
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();  // Предотвращение всплытия, чтобы не закрыть сразу
+      dropdown.classList.toggle('open');
+    });
+
+    // Закрытие выпадающего списка при клике вне его области
+    document.addEventListener('click', (e) => {
+      if (!dropdown.contains(e.target) && e.target !== toggleBtn) {
+        dropdown.classList.remove('open');
+      }
+    });
+
+    // Обновление поля ввода при изменении состояния любого чекбокса внутри списка
+    document.addEventListener('change', (e) => {
+      if (e.target && e.target.type === 'checkbox' && e.target.closest('#dropdownList')) {
+        updateSelectedDisplay();
+      }
+    });
+
+    // Обработка кнопки "Сохранить" – отправка выбранных категорий на сервер
+    saveBtn.addEventListener('click', async () => {
+      // Сбор всех отмеченных чекбоксов
+      const selectedCheckboxes = document.querySelectorAll('#dropdownList input[type="checkbox"]:checked');
+      // Формирование массива объектов {id: number} согласно требованиям API
+      const selectedIds = Array.from(selectedCheckboxes).map(cb => ({ id: parseInt(cb.value) }));
+
+      try {
+        // Отправка POST-запроса на эндпоинт /category/select/:sessionId
+        const response = await fetch(`/category/select/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(selectedIds)
+        });
+        const data = await response.json();
+        if (response.ok) {
+          // Перенаправление на панель исполнителя при успехе
+          window.location.href = `/dashboard/${sessionId}`;
+        } else {
+          // Показ ошибки, возвращённой сервером
+          alert(data.error || 'Ошибка при сохранении категорий');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Ошибка соединения с сервером');
+      }
+    });
+
+    // Запуск загрузки данных при загрузке страницы
+    loadData();

@@ -1,0 +1,336 @@
+components:
+  schemas:
+    Category:
+      type: object
+      required:
+        - title
+      properties:
+        id:
+          type: integer
+          description: ID категории
+          default: 1
+          example: 5
+        title:
+          type: string
+          description: Название категории
+          example: "Электроника"
+        deleted:
+          type: boolean
+          description: Флаг удаления
+          default: false
+        createdAt:
+          type: string
+          format: date-time
+          description: Дата и время создания
+          example: "2025-03-19T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Дата и время последнего обновления
+          example: "2025-03-19T12:45:00Z"
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Сообщение об ошибке
+
+    RegistrationRequest:
+      type: object
+      required:
+        - name
+        - login
+        - email
+        - password
+        - phone
+        - role
+      properties:
+        name:
+          type: string
+          description: Полное имя пользователя
+          example: "Иван Петров"
+        login:
+          type: string
+          description: Уникальный логин (без пробелов, не только из спецсимволов)
+          example: "ivan123"
+        email:
+          type: string
+          format: email
+          description: Электронная почта
+          example: "ivan@example.com"
+        password:
+          type: string
+          format: password
+          description: Пароль (минимум 6 символов)
+          example: "secret123"
+        phone:
+          type: string
+          description: Номер телефона
+          example: "89991234567"
+        role:
+          type: string
+          enum: [customer, executor]
+          description: Роль пользователя
+          example: "customer"
+        longitude:
+          type: number
+          format: float
+          minimum: -180
+          maximum: 180
+          description: Долгота (опционально)
+          example: 37.6175
+        latitude:
+          type: number
+          format: float
+          minimum: -90
+          maximum: 90
+          description: Широта (опционально)
+          example: 55.7558
+
+    LoginRequest:
+      type: object
+      required:
+        - login
+        - password
+      properties:
+        login:
+          type: string
+          description: Логин пользователя
+          example: "ivan123"
+        password:
+          type: string
+          format: password
+          description: Пароль
+          example: "secret123"
+        longitude:
+          type: number
+          format: float
+          minimum: -180
+          maximum: 180
+          description: Долгота (опционально)
+          example: 37.6175
+        latitude:
+          type: number
+          format: float
+          minimum: -90
+          maximum: 90
+          description: Широта (опционально)
+          example: 55.7558
+
+    AuthSuccessResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: UUID созданной сессии
+          example: "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+        role:
+          type: string
+          enum: [customer, executor]
+          description: Роль пользователя
+          example: "customer"
+
+    LogoutSuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Сообщение об успешном выходе
+          example: "Выход выполнен успешно"
+    
+    GetCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID категории
+          example: 5
+        title:
+          type: string
+          description: Название категории
+          example: "Ремонт"
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID заказа
+          example: 42
+        customerId:
+          type: integer
+          description: ID заказчика
+          example: 10
+        executorId:
+          type: integer
+          nullable: true
+          description: ID исполнителя (null, если не назначен)
+          example: 15
+        categoryId:
+          type: integer
+          description: ID категории
+          example: 3
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+          description: Дедлайн (опционально)
+          example: "2026-10-10T14:00:00Z"
+        description:
+          type: string
+          description: Описание заказа
+          example: "Нужно починить кран на кухне"
+        status:
+          type: string
+          enum: [created, assigned, cancelled, progress, completed, rated]
+          description: Статус заказа
+          example: "created"
+        score:
+          type: integer
+          description: Оценка (0..5)
+          example: 0
+        review:
+          type: string
+          nullable: true
+          description: Отзыв (может быть null)
+          example: null
+        createdAt:
+          type: string
+          format: date-time
+          description: Дата создания
+          example: "2026-03-20T08:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Дата последнего обновления
+          example: "2026-03-20T09:15:00Z"
+    
+    CreateOrderRequest:
+      type: object
+      required:
+        - description
+        - categoryId
+      properties:
+        description:
+          type: string
+          description: Описание заказа
+          example: "Нужно починить кран на кухне"
+        categoryId:
+          type: integer
+          description: ID категории (должна существовать и не быть удалённой)
+          example: 3
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+          description: Дедлайн в формате ISO 8601 (опционально)
+          example: "2026-10-10T14:00:00Z"
+
+    MyOrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID заказа
+          example: 42
+        createdAt:
+          type: string
+          format: date-time
+          description: Дата создания
+          example: "2025-03-20T08:30:00Z"
+        description:
+          type: string
+          description: Описание заказа
+          example: "Нужно починить кран на кухне"
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+          description: Дедлайн (опционально)
+          example: "2026-10-10T14:00:00Z"
+        status:
+          type: string
+          enum: [created, assigned, cancelled, progress, completed, rated]
+          description: Статус заказа
+          example: "created"
+        score:
+          type: integer
+          description: Оценка
+          example: 0
+        category:
+          type: object
+          properties:
+            title:
+              type: string
+              description: Название категории
+              example: "Ремонт"
+        executor:
+          type: object
+          nullable: true
+          properties:
+            name:
+              type: string
+              description: Имя исполнителя (если роль пользователя — заказчик)
+              example: "Иван Петров"
+            phone:
+              type: string
+              description: Телефон исполнителя
+              example: "89991234567"
+        customer:
+          type: object
+          nullable: true
+          properties:
+            name:
+              type: string
+              description: Имя заказчика (если роль пользователя — исполнитель)
+              example: "Мария Иванова"
+            phone:
+              type: string
+              description: Телефон заказчика
+              example: "89991234568"
+
+    ReviewRequest:
+      type: object
+      required:
+        - score
+      properties:
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Оценка от 1 до 5
+          example: 5
+        review:
+          type: string
+          nullable: true
+          description: Отзыв (опционально)
+          example: "Отличная работа!"
+
+    OfferItem:
+      type: object
+      properties:
+        userId:
+          type: integer
+          description: ID исполнителя
+          example: 42
+        name:
+          type: string
+          description: Имя исполнителя
+          example: "Иван Петров"
+        ratingAvg:
+          type: number
+          format: float
+          description: Средний рейтинг исполнителя
+          example: 4.8
+        ratingCount:
+          type: number
+          format: float
+          description: Количество оценок
+          example: 10
+        totalScore:
+          type: number
+          format: float
+          description: Итоговый скоринг (взвешенная сумма)
+          example: 0.76

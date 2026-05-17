@@ -1,0 +1,90 @@
+//- Шаблон страницы создания заказа (только для заказчика)
+//- Расширение базового макета layout.pug
+extends layout
+
+block content
+  //- Заголовок страницы
+  h2 Создание заказа
+
+  //- Блок для вывода ошибок, переданных при рендере (например, после неудачной отправки)
+  if error
+    .error-message(style="color: red;")= error
+
+  //- Форма создания заказа. action не указан – отправка через JavaScript, отмена стандартной перезагрузки
+  form#createOrderForm
+    .form-group
+      label(for="description") Описание заказа
+      //- Поле ввода описания, обязательное, 4 строки
+      textarea(name="description" id="description" required rows="4" placeholder="Переогорела проводка...")
+
+    .form-group
+      label(for="categoryId") Категория
+      //- Выпадающий список категорий, обязательный для выбора
+      select(name="categoryId" id="categoryId" required)
+        //- Перебор переданных из сервера категорий (только неудалённые)
+        each cat in categories
+          option(value=cat.id) #{cat.title}
+
+    .form-group
+      label(for="deadline") Срок
+      //- Поле выбора даты и времени (опционально)
+      input(type="datetime-local" name="deadline" id="deadline")
+
+    //- Блок кнопок: Отмена (ссылка на панель заказчика) и Создать (отправка формы)
+    .actions
+      a.button.cancel-btn(href=`/dashboard/${sessionId}`) Отмена
+      button.button(type="submit") Создать
+
+  //- Клиентский скрипт для отправки данных на API /order/create/:sessionId
+  script.
+    // Получение sessionId из переменной, переданной шаблонизатором
+    const sessionId = '#{sessionId}';
+    // Нахождение формы по id
+    const form = document.getElementById('createOrderForm');
+
+    // Добавление обработчика события отправки формы
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault(); // Отмена стандартной отправки (перезагрузки страницы)
+
+      // Получение значений полей формы
+      const description = document.getElementById('description').value.trim();
+      const categoryId = document.getElementById('categoryId').value;
+      const deadline = document.getElementById('deadline').value || null; // null, если поле пустое
+
+      // Простая клиентская валидация
+      if (!description) {
+        alert('Введите описание заказа');
+        return;
+      }
+
+      try {
+        // Отправка POST-запроса на эндпоинт создания заказа
+        const response = await fetch(`/order/create/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description, categoryId, deadline }) // Преобразование данных в JSON
+        });
+
+        // Парсинг ответа сервера
+        const data = await response.json();
+
+        // Проверка успешности ответа (статус 2xx)
+        if (response.ok) {
+          // Перенаправление на страницу выбора исполнителя, передавая id созданного заказа
+          window.location.href = `/dashboard/${sessionId}/choose-executor/${data.id}`;
+        } else {
+          // Обработка ошибки от сервера (например, 400, 404, 500)
+          // Поиск существующего блока ошибок или создание нового
+          const errorDiv = document.querySelector('.error-message') || document.createElement('div');
+          errorDiv.className = 'error-message';
+          errorDiv.style.color = 'red';
+          errorDiv.textContent = data.error || 'Ошибка при создании заказа';
+          // Вставка блока ошибок в начало формы
+          form.prepend(errorDiv);
+        }
+      } catch (err) {
+        // Логирование сетевой ошибки или ошибки парсинга JSON
+        console.error(err);
+        alert('Ошибка соединения с сервером');
+      }
+    });

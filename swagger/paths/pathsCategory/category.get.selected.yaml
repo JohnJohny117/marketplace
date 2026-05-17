@@ -1,0 +1,41 @@
+paths:
+  /category/selected/{sessionId}:
+    get:
+      summary: Получить выбранные исполнителем категории
+      description: Возвращает список категорий, которые исполнитель выбрал для себя. Требуется активная сессия и роль `executor`.
+      tags: [Categories]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Идентификатор сессии (UUID)
+      responses:
+        200:
+          description: Успешный ответ – массив выбранных категорий
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GetCategory'
+        401:
+          description: Сессия не найдена или неактивна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Недостаточно прав для выполнения действия
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

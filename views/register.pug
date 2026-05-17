@@ -1,0 +1,137 @@
+//- Шаблон страницы регистрации пользователя
+//- Расширяет базовый макет layout.pug, подставляя содержимое в блок content
+extends layout
+
+block content
+  //- Заголовок страницы
+  h2 Регистрация
+
+  //- Блок для вывода ошибок, которые могут быть переданы при рендере страницы (например, при GET-запросе)
+  if error
+    .error-message(style="color: red;")= error
+
+  //- Форма регистрации. action не указан, так как отправка будет через JavaScript
+  form#registerForm
+    //- Поле ФИО
+    .form-group
+      label(for="name") ФИО
+      input(type="text" name="name" id="name" required placeholder="Иванов Иван Иванович")
+    //- Поле email
+    .form-group
+      label(for="email") Почта
+      input(type="email" name="email" id="email" required placeholder="example@mail.ru")
+    //- Поле телефона
+    .form-group
+      label(for="phone") Телефон
+      input(type="tel" name="phone" id="phone" required maxlength="12" placeholder="89049876453")
+    //- Поле логина
+    .form-group
+      label(for="login") Логин
+      input(type="text" name="login" id="login" required placeholder="Введите логин")
+    //- Поле пароля
+    .form-group
+      label(for="password") Пароль
+      input(type="password" name="password" id="password" required placeholder="Введите пароль")
+    //- Поле подтверждения пароля
+    .form-group
+      label(for="confirmPassword") Подтверждение пароля
+      input(type="password" name="confirmPassword" id="confirmPassword" required placeholder="Повторите пароль")
+    //- Выбор роли (радиокнопки)
+    .form-group
+      label Выберите роль
+      .radio-group
+        label
+          input(type="radio" name="role" value="customer" checked)
+          | Заказчик
+        label
+          input(type="radio" name="role" value="executor")
+          | Исполнитель
+
+    //- Скрытые поля для координат
+    input(type="hidden" name="longitude" id="longitude" value="")
+    input(type="hidden" name="latitude" id="latitude" value="")
+
+    //- Блок кнопок: Отмена (ссылка на страницу входа) и Создать (отправка формы)
+    .actions
+      a.button.cancel-btn(href="/login") Отмена
+      button.button(type="submit") Создать
+
+  //- Клиентский скрипт для отправки данных на API /auth/regUser
+  script.
+
+    // Находим элементы формы
+    const form = document.getElementById('registerForm');
+    const longitudeInput = document.getElementById('longitude');
+    const latitudeInput = document.getElementById('latitude');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault(); // Отменяем стандартную отправку (перезагрузку страницы)
+
+      // Удаляем предыдущий errorDiv, если он есть (чтобы не дублировать)
+      const existingError = document.querySelector('.error-message');
+      if (existingError) existingError.remove();
+
+      // Получаем значения пароля и подтверждения
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+
+      // Проверка совпадения паролей
+      if (password !== confirmPassword) {
+        alert('Пароли не совпадают');
+        return;
+      }
+
+      // Получение геолокации (если получится)
+      try {
+        const coords = await getCurrentPosition();
+        longitudeInput.value = coords.longitude;
+        latitudeInput.value = coords.latitude;
+      } catch (geoError) {
+        console.warn('Не удалось получить геолокацию:', geoError.message);
+        // Поля останутся пустыми – координаты не будут отправлены на сервер
+      }
+
+      // Собираем данные из полей формы в объект formData (без confirmPassword)
+      const formData = {
+        name: document.getElementById('name').value,      // ФИО
+        email: document.getElementById('email').value,    // Email
+        phone: document.getElementById('phone').value,    // Телефон
+        login: document.getElementById('login').value,    // Логин
+        password: password,                               // Пароль (один раз)
+        role: document.querySelector('input[name="role"]:checked').value, // Выбранная роль
+        longitude: longitudeInput.value || null,
+        latitude: latitudeInput.value || null
+      };
+
+      try {
+        // Отправляем POST-запрос на эндпоинт регистрации
+        const response = await fetch('/auth/regUser', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData) // преобразуем объект в JSON-строку
+        });
+
+        // Парсим ответ сервера как JSON
+        const data = await response.json();
+
+        // Если ответ успешный (статус 200)
+        if (response.ok) {
+          // Перенаправляем пользователя на дашборд с полученным sessionId
+          window.location.href = `/dashboard/${data.sessionId}`;
+        } else {
+          // В случае ошибки (например, 409 Conflict — логин уже существует, 400 — неверные данные)
+          let errorMessage = data.error || 'Ошибка регистрации';
+          // Ищем существующий блок ошибок или создаём новый
+          const errorDiv = document.querySelector('.error-message') || document.createElement('div');
+          errorDiv.className = 'error-message';
+          errorDiv.style.color = 'red';
+          errorDiv.textContent = errorMessage;
+          // Вставляем блок ошибок перед формой
+          document.querySelector('form').prepend(errorDiv);
+        }
+      } catch (err) {
+        // Сетевая ошибка или ошибка парсинга JSON
+        console.error(err);
+        alert('Ошибка соединения с сервером');
+      }
+    });

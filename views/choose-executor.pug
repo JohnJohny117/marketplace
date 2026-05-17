@@ -1,0 +1,136 @@
+//- Шаблон страницы выбора исполнителя для заказчика
+//- Расширение базового макета layout.pug
+extends layout
+
+block content
+  //- Заголовок страницы
+  h2 Выбор исполнителя
+
+  //- Контейнер для динамического отображения списка предложений (карточек исполнителей)
+  .offers-container
+    //- Индикатор загрузки (пока данные не получены)
+    .loading-message Загрузка предложений...
+    //- Блок для ошибок (изначально скрыт)
+    .error-message(style="display: none;")
+
+  //- Блок с кнопкой возврата на панель управления (дашборд)
+  .actions
+    a.button(href=`/dashboard/${sessionId}`) На главную
+
+  //- Клиентский скрипт, управляющий загрузкой и отображением предложений
+  script.
+    // Получение данных из шаблона
+    const sessionId = '#{sessionId}';   // ID сессии (для запросов)
+    const orderId = '#{orderId}';       // ID заказа, для которого ищем исполнителя
+    const container = document.querySelector('.offers-container'); // контейнер для карточек
+
+    //Форматирование расстояния в читаемый вид
+    function formatDistance(meters) {
+      if (meters === undefined || meters === null) return '';
+      if (meters < 1000) {
+        return `📍 ${Math.round(meters)} м от вас`;
+      } else {
+        const km = (meters / 1000).toFixed(1);
+        return `📍 ${km} км от вас`;
+      }
+    }
+
+    // Основная функция загрузки предложений через API
+    async function loadOffers() {
+      try {
+        // Выполнение GET-запроса к эндпоинту /order/offers
+        const response = await fetch(`/order/offers/${sessionId}/${orderId}`);
+        const data = await response.json(); // парсинг JSON
+        if (!response.ok) throw new Error(data.error || 'Ошибка загрузки');
+
+        // Если сервер вернул не массив, а объект с полем message (например, «Нет исполнителей рядом с вами»)
+        if (data.message) {
+          // Отображение сообщения вместо карточек
+          container.innerHTML = `<p>${escapeHtml(data.message)}</p>`;
+          return;
+        }
+
+        // Если массив пуст – нет предложений
+        if (!data.length) {
+          container.innerHTML = '<p>Нет предложений</p>';
+          return;
+        }
+
+        // Очищение контейнера от индикатора загрузки
+        container.innerHTML = '';
+
+        // Создание карточек для каждого полученного исполнителя
+        data.forEach(executor => {
+          const card = document.createElement('div');
+          card.className = 'offer-card';
+          card.innerHTML = `
+            <div class="offer-info">
+              <div class="offer-header">
+                <span class="offer-name">${escapeHtml(executor.name)}</span>
+                <span>🎯 Общий Балл: ${executor.totalScore.toFixed(7)}</span>
+              </div>
+              <div class="offer-stats">
+                <span class="offer-rating">⭐ ${executor.ratingAvg}</span>
+                <span>📊 Оценок: ${executor.ratingCount}</span>
+                <span>${formatDistance(executor.distanceMeters)}</span>
+              </div>
+            </div>
+            <button class="button choose-btn" data-id="${executor.userId}">Выбрать</button>
+          `;
+          container.appendChild(card);
+        });
+
+        // Назначение обработчиков клика для всех кнопок «Выбрать»
+        document.querySelectorAll('.choose-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const executorId = btn.getAttribute('data-id'); // извлечение ID исполнителя
+            try {
+              // Отправка POST-запроса на эндпоинт назначения исполнителя
+              const assignResponse = await fetch(`/order/assign/${sessionId}/${orderId}/${executorId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+              });
+              const assignData = await assignResponse.json();
+              if (assignResponse.ok) {
+                // Успешное назначение – перенаправление на страницу "Мои заказы"
+                window.location.href = `/dashboard/${sessionId}/my-orders`;
+              } else {
+                // Показ ошибки от сервера
+                alert(assignData.error || 'Ошибка при выборе исполнителя');
+              }
+            } catch (err) {
+              console.error(err);
+              alert('Ошибка соединения с сервером');
+            }
+          });
+        });
+
+      } catch (err) {
+        // Обработка любых ошибок (сетевых, парсинга и т.д.)
+        console.error(err);
+        const errorDiv = container.querySelector('.error-message');
+        if (errorDiv) {
+          // Если блок ошибок существует – показываем его и заполняем текстом
+          errorDiv.style.display = 'block';
+          errorDiv.textContent = err.message || 'Ошибка загрузки предложений';
+        } else {
+          // Если блок ошибок не найден – создаём прямо в контейнере
+          container.innerHTML = '<div class="error-message" style="display:block;">Ошибка загрузки предложений</div>';
+        }
+      }
+    }
+
+    // Вспомогательная функция для экранирования HTML (защита от XSS)
+    function escapeHtml(str) {
+      if (!str) return '';
+      // Замена символов &, <, > на HTML-сущности
+      return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+      });
+    }
+
+    // Запуск загрузки предложений при загрузке страницы
+    loadOffers();

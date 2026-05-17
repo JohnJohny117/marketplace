@@ -1,0 +1,67 @@
+paths:
+  /category/select/{sessionId}:
+    post:
+      summary: Выбор категорий исполнителем
+      description: Привязывает переданные категории к исполнителю, идентифицированному через активную сессию. Требуется роль `executor`.
+      tags: [Categories]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Идентификатор сессии (UUID)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required:
+                  - id
+                properties:
+                  id:
+                    type: integer
+                    description: ID категории
+                    example: 5
+              example:
+                - id: 1
+                - id: 3
+      responses:
+        200:
+          description: Категории успешно обновлены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Категории успешно обновлены"
+        400:
+          description: Ошибка валидации (некорректные данные)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Сессия не найдена или неактивна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Недостаточно прав для выполнения действия 
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

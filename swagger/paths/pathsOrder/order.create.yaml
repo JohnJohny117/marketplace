@@ -1,0 +1,109 @@
+paths:
+  /order/create/{sessionId}:
+    post:
+      summary: Создать новый заказ
+      description: Создаёт заказ от имени заказчика (пользователь с ролью customer). Требуется активная сессия.
+      tags: [Orders]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Идентификатор сессии (UUID)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        201:
+          description: Заказ успешно создан
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    description: ID заказа
+                    example: 42
+                  customerId:
+                    type: integer
+                    description: ID заказчика
+                    example: 10
+                  executorId:
+                    type: integer
+                    nullable: true
+                    description: ID исполнителя (null, если не назначен)
+                    example: null
+                  categoryId:
+                    type: integer
+                    description: ID категории
+                    example: 3
+                  deadline:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: Дедлайн (опционально)
+                    example: "2026-10-10T14:00:00Z"
+                  description:
+                    type: string
+                    description: Описание заказа
+                    example: "Нужно починить кран на кухне"
+                  status:
+                    type: string
+                    enum: [created, assigned, cancelled, progress, completed, rated]
+                    description: Статус заказа
+                    example: "created"
+                  score:
+                    type: integer
+                    description: Оценка (0..5)
+                    example: 0
+                  review:
+                    type: string
+                    nullable: true
+                    description: Отзыв (может быть null)
+                    example: null
+                  createdAt:
+                    type: string
+                    format: date-time
+                    description: Дата создания
+                    example: "2026-03-20T08:30:00Z"
+                  updatedAt:
+                    type: string
+                    format: date-time
+                    description: Дата последнего обновления
+                    example: "2026-03-20T09:15:00Z"
+        400:
+          description: Ошибка валидации (некорректные данные)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Сессия неактивна или не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Недостаточно прав для выполнения действия 
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Категория не найдена или удалена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

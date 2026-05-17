@@ -1,0 +1,72 @@
+paths:
+  /order/review/{sessionId}/{orderId}:
+    post:
+      summary: Оценить выполненный заказ
+      description: |
+        Позволяет заказчику оставить оценку и отзыв для заказа, который находится в статусе `completed`.
+        После успешной оценки заказ переходит в статус `rated`, а у исполнителя пересчитываются:
+        - количество оценённых заказов (`ratingCount`)
+        - средний рейтинг с одним знаком после запятой (`ratingAvg`).
+        Требуется активная сессия.
+      tags: [Orders]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Идентификатор сессии (UUID)
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: integer
+          description: ID заказа
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+      responses:
+        200:
+          description: Оценка успешно сохранена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Оценка сохранена"
+        400:
+          description: Ошибка валидации (неверные данные, статус заказа не `completed`, отсутствие исполнителя)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Сессия неактивна или не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Недостаточно прав для выполнения действия 
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Заказ не найден или исполнитель не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

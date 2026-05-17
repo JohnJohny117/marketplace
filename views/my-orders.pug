@@ -1,0 +1,297 @@
+//- Шаблон страницы "Мои заказы" (доступен и заказчику, и исполнителю)
+//- Расширение базового макета layout.pug
+extends layout
+
+block content
+  //- Заголовок страницы
+  h2 Мои заказы
+
+  //- Контейнер для таблицы заказов (динамическая загрузка через JavaScript)
+  .orders-container
+    //- Таблица изначально скрыта (style="display: none;"), показывается после загрузки данных
+    table#orders-table(style="display: none;")
+      thead
+        //- Заголовки таблицы будут заполнены динамически в зависимости от роли пользователя
+        tr#table-header
+      tbody
+    //- Сообщение о загрузке (отображается, пока данные не пришли)
+    .loading-message Загрузка заказов...
+    //- Сообщение об ошибке (скрыто по умолчанию)
+    .error-message(style="color: red; display: none;") Ошибка загрузки заказов.
+
+  //- Кнопка возврата на панель управления (дашборд)
+  .actions
+    a.button(href=`/dashboard/${sessionId}`) На главную
+
+  //- Клиентский скрипт для загрузки и отображения заказов, а также обработки действий (кнопки)
+  script.
+    // ---------- Получение данных из шаблона ----------
+    // sessionId – идентификатор сессии (передан из сервера)
+    const sessionId = '#{sessionId}';
+    // userRole – роль текущего пользователя ('customer' или 'executor')
+    const userRole = '#{userRole}';
+
+    // ---------- DOM-элементы ----------
+    const table = document.getElementById('orders-table');
+    const tbody = table.querySelector('tbody');
+    const loadingDiv = document.querySelector('.loading-message');
+    const errorDiv = document.querySelector('.error-message');
+    const headerRow = document.getElementById('table-header');
+
+    // ---------- Формирование заголовков таблицы в зависимости от роли ----------
+    function setHeaders() {
+      if (userRole === 'customer') {
+        // Для заказчика: показываем исполнителя и его телефон
+        headerRow.innerHTML = `
+          <th>Номер заказа</th>
+          <th>Категория</th>
+          <th>Описание</th>
+          <th>Исполнитель</th>
+          <th>Срок</th>
+          <th>Телефон исполнителя</th>
+          <th>Статус</th>
+          <th>Оценка</th>
+          <th>Действия</th>
+        `;
+      } else {
+        // Для исполнителя: показываем заказчика и его телефон
+        headerRow.innerHTML = `
+          <th>Номер заказа</th>
+          <th>Категория</th>
+          <th>Описание</th>
+          <th>Заказчик</th>
+          <th>Срок</th>
+          <th>Телефон заказчика</th>
+          <th>Статус</th>
+          <th>Оценка</th>
+          <th>Действия</th>
+        `;
+      }
+    }
+
+    // ---------- Вспомогательные функции форматирования ----------
+    // Форматирование даты в локальный формат (день.месяц.год)
+    function formatDate(dateString) {
+      if (!dateString) return '—';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('ru-RU');
+    }
+
+    // Перевод статуса заказа с английского на русский
+    function formatStatus(status) {
+      const map = {
+        'created': 'Создан',
+        'assigned': 'Назначен',
+        'cancelled': 'Отменён',
+        'progress': 'В работе',
+        'completed': 'Завершён',
+        'rated': 'Оценён'
+      };
+      return map[status] || status;
+    }
+
+    //- Функция escapeHtml заменяет опасные символы (&, <, >) на их HTML-сущности (&amp;, &lt;, &gt;), чтобы браузер интерпретировал их как текст, а не как HTML-код. Это защищает от XSS-атак (внедрения вредоносных скриптов через пользовательский ввод).
+    function escapeHtml(str) {
+      if (!str) return ''; // если строка пустая или null, возвращаем пустую строку
+      return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m; // на всякий случай (других символов нет)
+      });
+    }
+
+    // ---------- Функции для исполнителя ----------
+    // Принять заказ (статус 'assigned' → 'progress')
+    async function acceptOrder(orderId) {
+      try {
+        // Отправка POST-запроса на эндпоинт /order/Progress/:sessionId/:orderId
+        const response = await fetch(`/order/Progress/${sessionId}/${orderId}`, { method: 'POST' });
+        if (!response.ok) throw new Error(await response.text());
+        alert('Заказ принят в работу');
+        await loadOrders(); // перезагружаем таблицу, кнопки исчезнут
+      } catch (err) {
+        alert('Ошибка: ' + err.message);
+      }
+    }
+
+    // Отклонить заказ (статус 'assigned' → 'created')
+    async function rejectOrder(orderId) {
+      try {
+        const response = await fetch(`/order/reject/${sessionId}/${orderId}`, { method: 'POST' });
+        if (!response.ok) throw new Error(await response.text());
+        alert('Заказ отклонён');
+        await loadOrders();
+      } catch (err) {
+        alert('Ошибка: ' + err.message);
+      }
+    }
+
+    // Завершить заказ (статус 'progress' → 'completed') с подтверждением
+    async function completeOrder(orderId) {
+      if (!confirm('Вы уверены, что хотите завершить этот заказ?')) return;
+      try {
+        const response = await fetch(`/order/complete/${sessionId}/${orderId}`, { method: 'POST' });
+        if (!response.ok) throw new Error(await response.text());
+        alert('Заказ завершён');
+        await loadOrders();
+      } catch (err) {
+        alert('Ошибка: ' + err.message);
+      }
+    }
+
+    // ---------- Функции для заказчика ----------
+    // Отменить заказ (статус 'created' → 'cancelled') с подтверждением
+    async function cancelOrder(orderId) {
+      if (!confirm('Отменить заказ? Это действие нельзя отменить.')) return;
+      try {
+        const response = await fetch(`/order/cancel/${sessionId}/${orderId}`, { method: 'POST' });
+        if (!response.ok) throw new Error(await response.text());
+        alert('Заказ отменён');
+        await loadOrders();
+      } catch (err) {
+        alert('Ошибка при отмене: ' + err.message);
+      }
+    }
+
+    // Переход на страницу выбора исполнителя для данного заказа
+    function chooseExecutor(orderId) {
+      window.location.href = `/dashboard/${sessionId}/choose-executor/${orderId}`;
+    }
+
+    // Переход на страницу оценки заказа (отдельная форма)
+    function rateOrder(orderId) {
+      window.location.href = `/rate-order/${sessionId}/${orderId}`;
+    }
+
+    // ---------- Основная функция загрузки и отрисовки заказов ----------
+    async function loadOrders() {
+      try {
+        // Запрос к API /order/myOrders/:sessionId (возвращает массив заказов)
+        const response = await fetch(`/order/myOrders/${sessionId}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const orders = await response.json();
+
+        // Очищаем тело таблицы перед новой отрисовкой
+        tbody.innerHTML = '';
+        if (orders.length === 0) {
+          // Если заказов нет – выводим сообщение, объединяя 9 столбцов
+          tbody.innerHTML = `<tr><td colspan="9">Нет заказов</td></tr>`;
+        } else {
+          // Перебираем каждый заказ и создаём строки таблицы
+          orders.forEach(order => {
+            // Определяем связанного пользователя:
+            // для заказчика – исполнитель, для исполнителя – заказчик
+            // Определяем связанного пользователя (исполнитель для заказчика, заказчик для исполнителя)
+            let relatedUser;
+            if (userRole === 'customer') {
+                relatedUser = order.executor;
+            } else {
+                relatedUser = order.customer;
+            }
+
+            // Имя связанного пользователя (если нет – прочерк)
+            let userName;
+            if (relatedUser) {
+                userName = relatedUser.name;
+            } else {
+                userName = '—';
+            }
+
+            // Телефон связанного пользователя (если нет – прочерк)
+            let userPhone;
+            if (relatedUser) {
+                userPhone = relatedUser.phone;
+            } else {
+                userPhone = '—';
+            }
+
+            // Название категории (если нет – прочерк)
+            let categoryTitle;
+            if (order.category) {
+                categoryTitle = order.category.title;
+            } else {
+                categoryTitle = '—';
+            }
+
+            // Оценка (если не определена – прочерк)
+            let score;
+            if (order.score !== undefined) {
+                score = order.score;
+            } else {
+                score = '—';
+            }
+
+            // Создаём новую строку
+            const row = tbody.insertRow();
+            // Заполняем первые 8 ячеек (общие для обеих ролей)
+            row.innerHTML = `
+              <td>${order.id}</td>
+              <td>${escapeHtml(categoryTitle)}</td>
+              <td>${escapeHtml(order.description)}</td>
+              <td>${escapeHtml(userName)}</td>
+              <td>${formatDate(order.deadline)}</td>
+              <td>${escapeHtml(userPhone)}</td>
+              <td>${formatStatus(order.status)}</td>
+              <td>${score}</td>
+            `;
+
+            // 9-я ячейка – действия (кнопки в зависимости от роли и статуса)
+            const actionsCell = row.insertCell();
+
+            if (userRole === 'customer') {
+              // Заказчик: для статуса 'created' – кнопки "Выбор" и "Отменить"
+              if (order.status === 'created') {
+                actionsCell.innerHTML = `
+                  <button class="choose-btn">Выбор</button>
+                  <button class="cancel-btn">Отменить</button>
+                `;
+                actionsCell.querySelector('.choose-btn').onclick = () => chooseExecutor(order.id);
+                actionsCell.querySelector('.cancel-btn').onclick = () => cancelOrder(order.id);
+              } 
+              // Для статуса 'completed' – кнопка "Оценить"
+              else if (order.status === 'completed') {
+                actionsCell.innerHTML = `<button class="rate-btn">Оценить</button>`;
+                actionsCell.querySelector('.rate-btn').onclick = () => rateOrder(order.id);
+              } 
+              else {
+                actionsCell.textContent = ''; // для остальных статусов кнопок нет
+              }
+            } 
+            else if (userRole === 'executor') {
+              // Исполнитель: для статуса 'assigned' – "Принять" и "Отклонить"
+              if (order.status === 'assigned') {
+                actionsCell.innerHTML = `
+                  <button class="accept-btn">Принять</button>
+                  <button class="cancel-btn">Отклонить</button>
+                `;
+                actionsCell.querySelector('.accept-btn').onclick = () => acceptOrder(order.id);
+                actionsCell.querySelector('.cancel-btn').onclick = () => rejectOrder(order.id);
+              } 
+              // Для статуса 'progress' – кнопка "Завершить"
+              else if (order.status === 'progress') {
+                actionsCell.innerHTML = `<button class="complete-btn">Завершить</button>`;
+                actionsCell.querySelector('.complete-btn').onclick = () => completeOrder(order.id);
+              } 
+              else {
+                actionsCell.textContent = '';
+              }
+            }
+          });
+        }
+
+        // Показать таблицу и скрыть индикаторы загрузки/ошибки
+        table.style.display = 'table';
+        loadingDiv.style.display = 'none';
+        errorDiv.style.display = 'none';
+      } catch (err) {
+        console.error(err);
+        loadingDiv.style.display = 'none';
+        errorDiv.style.display = 'block';
+        errorDiv.textContent = 'Ошибка загрузки заказов. Попробуйте позже.';
+      }
+    }
+
+    // ---------- Инициализация страницы ----------
+    setHeaders();   // установить заголовки в соответствии с ролью
+    loadOrders();   // загрузить и отобразить заказы

@@ -1,0 +1,75 @@
+//- Шаблон страницы добавления новой категории (только для администратора)
+//- Расширяет базовый макет layout.pug, подставляя содержимое в блок content
+extends layout
+
+block content
+  //- Заголовок страницы
+  h2 Добавить категорию
+
+  //- Блок для вывода ошибок, переданных при рендере (например, после неудачной отправки)
+  if error
+    .error-message(style="color: red;")= error
+
+  //- Форма добавления категории. action не указан, отправка через JavaScript, отмена стандартной перегрузки страницы
+  form#addCategoryForm
+    .form-group
+      label(for="title") Категория
+      //- Поле ввода названия категории, обязательное для заполнения
+      input(type="text" name="title" id="title" required placeholder="Например, Клининг")
+    .actions
+      //- Кнопка "Отмена" – ссылка на страницу дашборда администратора
+      a.button.cancel-btn(href=`/dashboard/${sessionId}`) Отмена
+      //- Кнопка отправки формы
+      button.button(type="submit") Сохранить
+
+  //- Клиентский скрипт для отправки данных на API /category/add/:sessionId
+  script.
+    // Получение sessionId из переменной, переданной шаблонизатором
+    const sessionId = '#{sessionId}';
+    // Нахождение форму по id
+    const form = document.getElementById('addCategoryForm');
+
+    //  Обработчик события отправки формы
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault(); // Отменяем стандартную отправку (перезагрузку страницы)
+
+      // Получение и обрезка пробелов из поля ввода
+      const title = document.getElementById('title').value.trim();
+      // Простая валидация на клиенте
+      if (!title) {
+        alert('Введите название категории');
+        return;
+      }
+
+      try {
+        // Отправка POST-запроса на эндпоинт добавления категории
+        const response = await fetch(`/category/add/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title }) // Отправка JSON с названием категории
+        });
+
+        // Парсим ответ сервера
+        const data = await response.json();
+
+        // Если ответ успешный (статус 2xx)
+        if (response.ok) {
+          // Перенаправление на страницу администратора (дашборд)
+          // После редиректа таблица категорий обновится, так как страница перезагрузится
+          window.location.href = `/dashboard/${sessionId}`;
+        } else {
+          // В случае ошибки (например, 409 Conflict – категория уже существует)
+          // Ищем существующий блок ошибок или создаём новый
+          const errorDiv = document.querySelector('.error-message') || document.createElement('div');
+          errorDiv.className = 'error-message';
+          errorDiv.style.color = 'red';
+          errorDiv.textContent = data.error || 'Ошибка при добавлении категории';
+          // Вставляем блок ошибок в начало формы
+          form.prepend(errorDiv);
+        }
+      } catch (err) {
+        // Сетевая ошибка или ошибка парсинга JSON
+        console.error(err);
+        alert('Ошибка соединения с сервером');
+      }
+    });

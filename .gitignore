@@ -1,0 +1,25 @@
+# Ignore dependency directories (don't upload thousands of tiny files)
+node_modules/
+venv/
+env/
+logs/
+
+# Ignore sensitive files (don't leak passwords or API keys)
+.env
+credentials.json
+
+# Ignore log files
+*.log
+npm-debug.log*
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore build output and temporary files
+dist/
+build/
+*.tmp
+
+# Exceptions: Ignore all .log files, BUT keep 'important.log'
+!important.log

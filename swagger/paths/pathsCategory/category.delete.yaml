@@ -1,0 +1,82 @@
+paths:
+  /category/delete/{sessionId}:
+    post:
+      summary: Удаление категории (устанавливает deleted = true)
+      tags: [Categories]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Идентификатор сессии (UUID)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: integer
+                  description: ID категории
+                  example: 5
+      responses:
+        200:
+            description: Категория помечена как удалённая
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    message:
+                      type: string
+                    category:
+                      $ref: '#/components/schemas/Category'
+                example:
+                  message: "Категория помечена как удалённая"
+                  category:
+                    id: 5
+                    title: "Электроника"
+                    deleted: true
+                    createdAt: "2025-01-01T12:00:00Z"
+                    updatedAt: "2025-01-02T12:00:00Z"
+        400:
+          description: Ошибка валидации (некорректные данные)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Сессия не найдена или неактивна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Недостаточно прав для выполнения действия 
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Категория не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        410:
+          description: Категория уже удалена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

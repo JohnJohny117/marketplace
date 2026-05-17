@@ -1,0 +1,91 @@
+//- Шаблон страницы оценки заказа (только для заказчика, когда заказ в статусе "completed")
+//- Расширение базового макета layout.pug
+extends layout
+
+block content
+  //- Заголовок страницы
+  h2 Оценка заказа
+
+  //- Блок для вывода ошибок, переданных при рендере (например, если заказ не найден или уже оценён)
+  if error
+    .error-message(style="color: red; margin-bottom: 1rem;")= error
+
+  //- Форма отправки оценки. action ведёт на API-эндпоинт /order/review/:sessionId/:orderId
+  //- Отправка будет перехвачена JavaScript'ом, чтобы избежать перезагрузки страницы
+  form#rateForm(method="POST" action=`/order/review/${sessionId}/${orderId}`)
+    .form-group
+      label(for="score") Оценка (от 1 до 5):
+      //- Выпадающий список с оценками, обязательное поле
+      select(name="score" id="score" required)
+        option(value="") -- выберите --
+        option(value="1") 1 - Ужасно
+        option(value="2") 2 - Плохо
+        option(value="3") 3 - Удовлетворительно
+        option(value="4") 4 - Хорошо
+        option(value="5") 5 - Отлично
+
+    .form-group
+      label(for="review") Отзыв:
+      //- Текстовое поле для отзыва (необязательное)
+      textarea(name="review" id="review" rows="4" placeholder="Напишите ваш отзыв об исполнителе...")
+
+    //- Блок кнопок: Сохранить оценку (отправка формы) и Отмена (возврат к списку заказов)
+    .actions
+      button(type="submit" class="button") Сохранить оценку
+      //- Ссылка отмены ведёт на страницу "Мои заказы" (исправленный путь через /dashboard/)
+      a.button.cancel-btn(href=`/dashboard/${sessionId}/my-orders`) Отмена
+
+  //- Клиентский скрипт для асинхронной отправки оценки на сервер
+  script.
+    // Получение sessionId из переменной, переданной шаблонизатором (необходимо для редиректа)
+    const sessionId = '#{sessionId}';
+    // Нахождение формы по id
+    const form = document.getElementById('rateForm');
+
+    // Добавление обработчика события отправки формы
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault(); // Отменяем стандартную отправку (перезагрузку страницы)
+
+      // Получение значений полей формы
+      const score = document.getElementById('score').value;
+      const review = document.getElementById('review').value;
+
+      // Простая клиентская валидация: оценка обязательна
+      if (!score) {
+        alert('Пожалуйста, выберите оценку');
+        return;
+      }
+
+      try {
+        // Отправка POST-запроса на эндпоинт /order/review/:sessionId/:orderId
+        // form.action — это свойство DOM-элемента формы, которое возвращает полный URL,
+        // указанный в атрибуте action тега <form>. Например, если в HTML написано
+        // action="/order/review/abc-123/456", то form.action будет равен
+        // "http://localhost:3000/order/review/abc-123/456".
+        const response = await fetch(form.action, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            score: parseInt(score, 10), // Преобразуем строку в число (1–5)
+            review: review || ''         // Если отзыв пустой, отправляем пустую строку
+          })
+        });
+
+        // Парсинг ответа сервера
+        const data = await response.json();
+
+        // Проверка успешности ответа (статус 2xx)
+        if (response.ok) {
+          alert('Оценка сохранена');
+          // Перенаправление на страницу "Мои заказы" (корректный маршрут /dashboard/:sessionId/my-orders)
+          window.location.href = `/dashboard/${sessionId}/my-orders`;
+        } else {
+          // Обработка ошибки от сервера (например, 400, 404, 500)
+          throw new Error(data.error || 'Ошибка при сохранении оценки');
+        }
+      } catch (err) {
+        // Логирование ошибки в консоль браузера и показ alert
+        console.error(err);
+        alert('Ошибка: ' + err.message);
+      }
+    });

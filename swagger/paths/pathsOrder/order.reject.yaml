@@ -1,0 +1,61 @@
+paths:
+  /order/reject/{sessionId}/{orderId}:
+    post:
+      summary: Отклонить заказ (исполнитель)
+      description: Отклоняет назначенный заказ, возвращает статус `created` и освобождает исполнителя. Требуется активная сессия.
+      tags: [Orders]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Идентификатор сессии (UUID)
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: integer
+          description: ID заказа
+      responses:
+        200:
+          description: Заказ отклонён, статус "created", исполнитель сброшен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Заказ отклонён, статус 'Создан'"
+        400:
+          description: Неверный статус заказа (ожидался "assigned")
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Сессия неактивна или не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Недостаточно прав для выполнения действия 
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Заказ не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'

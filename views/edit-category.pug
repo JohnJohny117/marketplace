@@ -1,0 +1,73 @@
+//- Шаблон страницы редактирования категории (только для администратора)
+//- Расширяет базовый макет layout.pug
+extends layout
+
+block content
+  //- Заголовок страницы
+  h2 Редактировать категорию
+
+  //- Блок для вывода ошибок, переданных при рендере (например, после неудачной отправки)
+  if error
+    .error-message(style="color: red;")= error
+
+  //- Форма редактирования
+  form#editCategoryForm
+    .form-group
+      label(for="title") Категория
+      //- Поле ввода с предзаполненным текущим названием категории (value=currentTitle)
+      input(type="text" name="title" id="title" required value=currentTitle placeholder="Например, Клининг")
+    .actions
+      //- Кнопка "Отмена" – ссылка на страницу дашборда администратора
+      a.button.cancel-btn(href=`/dashboard/${sessionId}`) Отмена
+      //- Кнопка отправки формы
+      button.button(type="submit") Сохранить
+
+  //- Клиентский скрипт для отправки данных на API /category/edit/:sessionId
+  script.
+    // Переменные, переданные шаблонизатором из маршрута
+    const sessionId = '#{sessionId}';     // ID сессии (для формирования URL запроса)
+    const categoryId = '#{categoryId}';   // ID редактируемой категории (будет отправлен на сервер)
+    const form = document.getElementById('editCategoryForm'); // Находим форму
+
+    // Обработчик отправки формы
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault(); // Отмена стандартной отправки (перезагрузка страницы)
+
+      // Получение и обрезка пробелов из поля ввода
+      const title = document.getElementById('title').value.trim();
+      if (!title) {
+        alert('Введите название категории');
+        return;
+      }
+
+      try {
+        // Отправка POST-запроса на эндпоинт редактирования категории
+        const response = await fetch(`/category/edit/${sessionId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: categoryId, title }) // Отправка id и нового названия
+        });
+
+        // Парсим ответ сервера
+        const data = await response.json();
+
+        // Если ответ успешный (статус 2xx)
+        if (response.ok) {
+          // Перенаправляем на страницу администратора (дашборд)
+          window.location.href = `/dashboard/${sessionId}`;
+        } else {
+          // В случае ошибки (например, 409 Conflict – категория с таким названием уже существует)
+          // Ищем существующий блок ошибок или создаём новый
+          const errorDiv = document.querySelector('.error-message') || document.createElement('div');
+          errorDiv.className = 'error-message';
+          errorDiv.style.color = 'red';
+          errorDiv.textContent = data.error || 'Ошибка при редактировании категории';
+          // Вставляем блок ошибок в начало формы
+          form.prepend(errorDiv);
+        }
+      } catch (err) {
+        // Сетевая ошибка или ошибка парсинга JSON
+        console.error(err);
+        alert('Ошибка соединения с сервером');
+      }
+    });

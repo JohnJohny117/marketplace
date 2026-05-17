@@ -1,0 +1,94 @@
+extends layout
+
+block content
+  //- Заголовок страницы
+  h2 Вход в систему
+
+  //- Блок для отображения ошибки, переданной при рендере (например, при GET-запросе)
+  if error
+    .error-message(style="color: red;")= error
+
+  //- Форма входа. action не указан – отправка через JavaScript, отмена стандартной перезагрузки
+  form#loginForm
+    .form-group
+      label(for="login") Логин
+      input(type="text" name="login" id="login" required placeholder="Введите логин")
+    .form-group
+      label(for="password") Пароль
+      input(type="password" name="password" id="password" required placeholder="Введите пароль")
+
+    //- Скрытые поля для координат (заполняются перед отправкой)
+    input(type="hidden" name="longitude" id="longitude" value="")
+    input(type="hidden" name="latitude" id="latitude" value="")
+
+    button(type="submit") Войти
+
+  .registration-link
+    | Нет аккаунта? 
+    a(href="/register") Зарегистрироваться
+
+  //- Клиентский скрипт: получение геолокации и отправка данных на API /auth/login
+  script.
+    // Получение элементов формы и скрытых полей
+    const form = document.getElementById('loginForm');
+    const longitudeInput = document.getElementById('longitude');
+    const latitudeInput = document.getElementById('latitude');
+
+    // Добавление обработчика события отправки формы
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault(); // Отмена стандартной отправки (перезагрузка страницы)
+
+      // Получение значений полей логина и пароля
+      const login = document.getElementById('login').value;
+      const password = document.getElementById('password').value;
+
+      // Получение геолокации (если возможно)
+      try {
+        // Вызов глобальной функции getCurrentPosition (определена в /public/js/geolocation.js)
+        const coords = await getCurrentPosition();
+        longitudeInput.value = coords.longitude;
+        latitudeInput.value = coords.latitude;
+      } catch (geoError) {
+        // Логирование ошибки получения координат (пользователь отказал или произошёл сбой)
+        console.warn('Не удалось получить геолокацию:', geoError.message);
+        // Поля останутся пустыми – координаты не будут отправлены на сервер
+      }
+
+      // Формирование объекта с данными для отправки (включая координаты, если они есть)
+      const formData = {
+        login: login,
+        password: password,
+        longitude: longitudeInput.value || undefined,
+        latitude: latitudeInput.value || undefined
+      };
+
+      try {
+        // Отправка POST-запроса на API-эндпоинт /auth/login
+        const response = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        // Парсинг JSON-ответа
+        const data = await response.json();
+
+        // Проверка успешности ответа (статус 2xx)
+        if (response.ok) {
+          // Перенаправление на дашборд с полученным sessionId
+          window.location.href = `/dashboard/${data.sessionId}`;
+        } else {
+          // Отображение ошибки, возвращённой сервером
+          const errorDiv = document.querySelector('.error-message') || document.createElement('div');
+          errorDiv.className = 'error-message';
+          errorDiv.style.color = 'red';
+          errorDiv.textContent = data.error || 'Ошибка входа';
+          // Вставка блока ошибки в начало формы
+          document.querySelector('form').prepend(errorDiv);
+        }
+      } catch (err) {
+        // Обработка сетевой ошибки или ошибки парсинга
+        console.error(err);
+        alert('Ошибка соединения с сервером');
+      }
+    });

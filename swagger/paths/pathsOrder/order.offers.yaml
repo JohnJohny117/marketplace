@@ -1,0 +1,104 @@
+paths:
+  /order/offers/{sessionId}/{orderId}:
+    get:
+      summary: Получить список подходящих исполнителей для заказа
+      description: |
+        Возвращает топ-5 исполнителей, которые:
+        - имеют категорию, совпадающую с категорией заказа,
+        - находятся в радиусе 25 км от заказчика,
+        - отсортированы по рейтингу (с учётом близости, среднего рейтинга и количества оценок).
+        Требуется активная сессия заказчика (роль customer).
+      tags: [Orders]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Идентификатор сессии (UUID)
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: integer
+          description: ID заказа
+      responses:
+        200:
+          description: Успешный ответ – массив предложений (до 5 элементов) или сообщение
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/OfferItem'
+                  - type: object
+                    properties:
+                      message:
+                        type: string
+                        example: "Нет исполнителей рядом с вами (в радиусе 25 км)"
+                      offers:
+                        type: array
+                        items: {}
+              example:
+                - userId: 42
+                  name: "Иван Петров"
+                  ratingAvg: 4.8
+                  ratingCount: 150
+                  totalScore: 0.5705
+                  distanceMeters: 500
+                - userId: 43
+                  name: "Мария Иванова"
+                  ratingAvg: 4.9
+                  ratingCount: 120
+                  totalScore: 0.5600
+                  distanceMeters: 1200
+                - userId: 44
+                  name: "Алексей Смирнов"
+                  ratingAvg: 4.7
+                  ratingCount: 200
+                  totalScore: 0.5400
+                  distanceMeters: 800
+                - userId: 45
+                  name: "Елена Сидорова"
+                  ratingAvg: 4.5
+                  ratingCount: 90
+                  totalScore: 0.5200
+                  distanceMeters: 2500
+                - userId: 46
+                  name: "Дмитрий Козлов"
+                  ratingAvg: 4.2
+                  ratingCount: 60
+                  totalScore: 0.4900
+                  distanceMeters: 3200
+        400:
+          description: Неверный статус заказа (ожидался "created")
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        401:
+          description: Сессия неактивна или не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        403:
+          description: Недостаточно прав для выполнения действия
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        404:
+          description: Заказ не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        500:
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
