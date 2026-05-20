@@ -1,7 +1,7 @@
 const { Sequelize, DataTypes } = require('sequelize');
-
+require('dotenv').config();
 // Настройки подключения к БД 
-const sequelize = new Sequelize('marketplace', 'postgres', '123', {
+const sequelize = new Sequelize('marketplace', 'postgres', process.env.PASSWORD_BD, {
   host: 'localhost',
   dialect: 'postgres',
   logging: false, // отключить логи SQL-запросов

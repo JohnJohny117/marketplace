@@ -1,4 +1,5 @@
 const express = require('express');
+const { Op } = require('sequelize');
 const { Category, User, UsersCategories, sequelize } = require('../models');
 const { validateSession } = require('../middlewares/validateSession');
 const {
@@ -74,8 +75,20 @@ router.post('/edit/:sessionId', validateSession('admin'), validateCategoryEdit, 
       return res.status(410).json({ error: 'Категория удалена и не может быть изменена' });
     }
 
-    // Если название меняется, делаем проверку уникальности
+    // Если название не изменилось, сразу возвращаем категорию (без ошибки)
     if (category.title === title) {
+      return res.json(category);
+    }
+
+    // Проверяем, существует ли другая (не удалённая) категория с таким же названием
+    const duplicate = await Category.findOne({
+      where: {
+        title: title,
+        id: { [Op.ne]: id },
+        deleted: false
+      }
+    });
+    if (duplicate) {
       return res.status(409).json({ error: 'Категория с таким названием уже существует' });
     }
 

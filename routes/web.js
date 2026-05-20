@@ -4,11 +4,6 @@ const { validateSession } = require('../middlewares/validateSession');
 
 const router = express.Router();
 
-// GET /web/login – страница входа
-router.get('/login', (req, res) => {
-  res.render('login', { title: 'Вход', error: null });
-});
-
 // GET /register – страница регистрации
 router.get('/register', (req, res) => {
   res.render('register', { title: 'Регистрация' });

@@ -106,7 +106,7 @@ block content
     async function acceptOrder(orderId) {
       try {
         // Отправка POST-запроса на эндпоинт /order/Progress/:sessionId/:orderId
-        const response = await fetch(`/order/Progress/${sessionId}/${orderId}`, { method: 'POST' });
+        const response = await fetch(`/order/progress/${sessionId}/${orderId}`, { method: 'POST' });
         if (!response.ok) throw new Error(await response.text());
         alert('Заказ принят в работу');
         await loadOrders(); // перезагружаем таблицу, кнопки исчезнут
@@ -216,7 +216,7 @@ block content
 
             // Оценка (если не определена – прочерк)
             let score;
-            if (order.score !== undefined) {
+            if (order.score !== null) {
                 score = order.score;
             } else {
                 score = '—';

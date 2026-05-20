@@ -4,12 +4,10 @@ const { Order, Category, User, sequelize} = require('../models');
 const { validateSession } = require('../middlewares/validateSession');
 const { checkCategoryExists,} = require('../middlewares/validateCategory');
 const {validateOrderInput, findOrderAndCheck, validateReviewInput} = require('../middlewares/validateOrder');
-
 const geolib = require('geolib'); // npm install geolib
 const { Op } = require('sequelize');
 const { sendEmail } = require('../services/emailService');
 const { getOrderCreatedTemplate, getOrderStatusUpdateTemplate, getOrderRatedTemplate, getOrderRejectedTemplate, getOrderAssignedTemplate, formatStatus } = require('../services/emailTemplates');
-
 
 
 // POST /order/create/:sessionId – создание нового заказа
@@ -30,7 +28,7 @@ router.post(
         deadline: deadline ? new Date(deadline) : null,
         executorId: null,
         status: 'created',
-        score: 0,
+        score: null,
         review: null
       });
 
@@ -63,7 +61,7 @@ router.post(
 router.post(
   '/assign/:sessionId/:orderId/:executorId',
   validateSession('customer'),   // проверка сессии
-  findOrderAndCheck('created'), // проверка существования заказа и статуса created
+  findOrderAndCheck('created', 'customerId'), // проверка существования заказа и статуса created
   async (req, res) => {
     try {
       const { executorId } = req.params;
@@ -106,11 +104,11 @@ router.post(
   }
 );
 
-// POST /order/Progress/:sessionId/:orderId – взять в работу (исполнитель)
+// POST /order/progress/:sessionId/:orderId – взять в работу (исполнитель)
 router.post(
-  '/Progress/:sessionId/:orderId',
+  '/progress/:sessionId/:orderId',
   validateSession('executor'),
-  findOrderAndCheck('assigned'),
+  findOrderAndCheck('assigned', 'executorId'),
   async (req, res) => {
     try {
       req.order.status = 'progress';
@@ -140,7 +138,7 @@ router.post(
 router.post(
   '/reject/:sessionId/:orderId',
   validateSession('executor'),
-  findOrderAndCheck('assigned'),
+  findOrderAndCheck('assigned', 'executorId'),
   async (req, res) => {
     try {
       req.order.status = 'created';
@@ -170,7 +168,7 @@ router.post(
 router.post(
   '/cancel/:sessionId/:orderId',
   validateSession('customer'),
-  findOrderAndCheck('created'),
+  findOrderAndCheck('created', 'customerId'),
   async (req, res) => {
     try {
       req.order.status = 'cancelled';
@@ -199,7 +197,7 @@ router.post(
 router.post(
   '/complete/:sessionId/:orderId',
   validateSession('executor'),
-  findOrderAndCheck('progress'),
+  findOrderAndCheck('progress', 'executorId'),
   async (req, res) => {
     try {
       req.order.status = 'completed';
@@ -230,7 +228,7 @@ router.post(
   '/review/:sessionId/:orderId',
   validateSession('customer'),  // проверка сессии
   validateReviewInput,       // проверка score и review
-  findOrderAndCheck('completed'), // заказ должен быть в статусе completed
+  findOrderAndCheck('completed', 'customerId'), // заказ должен быть в статусе completed
   async (req, res) => {
     const transaction = await sequelize.transaction();
     try {
@@ -367,114 +365,6 @@ router.get('/myOrders/:sessionId', validateSession('customer', 'executor'), asyn
 });
 
 // GET /order/offers/:sessionId/:orderId – список исполнителей, подходящих под категорию заказа
-/* router.get(
-  '/offers/:sessionId/:orderId',
-  validateSession('customer'),       // Только заказчик имеет доступ
-  findOrderAndCheck('created'),      // Заказ должен быть в статусе "created"
-  async (req, res) => {
-    try {
-      // Получение данных из запроса и сессии
-      const customer = req.user;          // Заказчик (уже загружен в validateSession)
-      const order = req.order;            // Заказ (уже загружен в findOrderAndCheck)
-      const categoryId = order.categoryId; // Категория заказа
-
-      // Проверка наличия координат у заказчика
-      const customerCoords = { lon: customer.longitude, lat: customer.latitude };
-      const hasCustomerCoords = customerCoords.lon != null && customerCoords.lat != null;
-      if (!hasCustomerCoords) {
-        // Если у заказчика нет координат – невозможно вычислить расстояние
-        return res.status(200).json({ message: 'У вас не указаны координаты, невозможно найти исполнителей рядом', offers: [] });
-      }
-
-      // Поиск исполнителей с нужной категорией и с координатами
-      const potentialExecutors = await User.findAll({
-        where: {
-          role: 'executor',                     // Только исполнители
-          longitude: { [Op.ne]: null },         // Долгота не NULL
-          latitude: { [Op.ne]: null }           // Широта не NULL
-        },
-        include: [{
-          model: Category,
-          as: 'categories',
-          where: { id: categoryId, deleted: false }, // Категория совпадает с категорией заказа и не удалена
-          attributes: [],        // Не нужно выводить данные категории
-          through: { attributes: [] } // Не нужны поля промежуточной таблицы
-        }],
-        attributes: ['id', 'name', 'ratingAvg', 'ratingCount', 'longitude', 'latitude'],
-      });
-
-      // Если нет ни одного подходящего исполнителя
-      if (!potentialExecutors.length) {
-        return res.status(200).json({ message: 'Нет исполнителей, подходящих под категорию заказа', offers: [] });
-      }
-
-      // Предварительные вычисления
-      // Максимальное количество оценок среди всех найденных исполнителей (для нормализации)
-      const maxRatingCount = Math.max(...potentialExecutors.map(e => e.ratingCount), 1);
-      const RADIUS_25KM = 25000; // 25 км в метрах
-
-      // Расчёт скора для каждого исполнителя и фильтрация по радиусу
-      const offersWithDistance = potentialExecutors.map(executor => {
-        // Вычисление расстояния между заказчиком и исполнителем (в метрах)
-        const distance = geolib.getDistance(
-          { latitude: customerCoords.lat, longitude: customerCoords.lon },
-          { latitude: executor.latitude, longitude: executor.longitude }
-        );
-        // Если расстояние больше 25 км – исключаем исполнителя (возвращаем null)
-        if (distance > RADIUS_25KM) return null;
-
-        // Proximity score (близость) – экспоненциальное убывание с порогом 5 км
-        const proximityScore = Math.exp(-distance / 5000);
-
-        // Нормализованный средний рейтинг (от 0 до 1)
-        let ratingAvgScore = executor.ratingAvg / 5;
-        // Бонус для новых исполнителей (нет оценок) – небольшое преимущество
-        if (executor.ratingCount === 0) ratingAvgScore += 0.25;
-
-        // Нормализованное количество оценок (от 0 до 1)
-        const ratingCountScore = Math.min(1, executor.ratingCount / maxRatingCount);
-
-        // Веса факторов
-        const w1 = 0.5; // близость
-        const w2 = 0.2; // средняя оценка
-        const w3 = 0.3; // количество оценок
-
-        // Итоговый скор
-        let totalScore = w1 * proximityScore + w2 * ratingAvgScore + w3 * ratingCountScore;
-
-        return {
-          userId: executor.id,
-          name: executor.name,
-          ratingAvg: executor.ratingAvg,
-          ratingCount: executor.ratingCount,
-          totalScore: totalScore,
-        };
-      }).filter(o => o !== null); // Удаление исполнителей за пределами радиуса
-
-      // Если после фильтрации по радиусу никого не осталось
-      if (offersWithDistance.length === 0) {
-        return res.status(200).json({ message: 'Нет исполнителей рядом с вами (в радиусе 25 км)', offers: [] });
-      }
-
-      // Сортировка по убыванию скора (и по userId при равенстве)
-      offersWithDistance.sort((a, b) => {
-        if (a.totalScore !== b.totalScore) return b.totalScore - a.totalScore;
-        return a.userId - b.userId;
-      });
-
-      // Отбор топ-5 исполнителей
-      const top5 = offersWithDistance.slice(0, 5);
-      // Возвращаем только нужные поля 
-      const result = top5.map(({ userId, name, ratingAvg, ratingCount, totalScore}) => ({ userId, name, ratingAvg, ratingCount, totalScore }));
-      res.status(200).json(result);
-    } catch (error) {
-      console.error('Ошибка при получении предложений:', error.message);
-      res.status(500).json({ error: `Внутренняя ошибка сервера: ${error.message}` });
-    }
-  }
-); */
-
-// GET /order/offers/:sessionId/:orderId – список исполнителей, подходящих под категорию заказа
 // Вход: sessionId (UUID сессии заказчика), orderId (ID заказа)
 // Выход: JSON-массив топ-5 исполнителей с их идентификаторами, именами, рейтингами, количеством оценок и итоговым скором
 router.get(
@@ -560,7 +450,7 @@ router.get(
           let ratingAvgScore = executor.ratingAvg / 5;
           // Бонус для новых исполнителей (у которых ещё нет оценок)
           // Добавляем +0.1, чтобы они не получили нулевой вклад в Score
-          if (executor.ratingCount === 0) ratingAvgScore += 0.2;
+          if (executor.ratingCount === 0) ratingAvgScore += 0.8;
 
           // 4. Rating_count_score – нормализованное количество оценок исполнителя
           // Относительно общего числа оценённых заказов в системе.
@@ -582,10 +472,6 @@ router.get(
             ratingCount: executor.ratingCount,
             totalScore: totalScore,
             distanceMeters: distanceMeters,
-            proximityScore,
-            ratingAvgScore,
-            ratingCountScore,
-            totalRatedOrders
           };
         })
         .filter(o => o !== null); // Удаляем исключённых (за пределами радиуса)
@@ -607,20 +493,14 @@ router.get(
 
       // Отбор топ-5 исполнителей
       const top5 = offers.slice(0,5);
-      const result = top5.map(({ userId, name, ratingAvg, ratingCount, totalScore, distanceMeters, proximityScore, ratingAvgScore, 
-      ratingCountScore, totalRatedOrders }) => ({
+      const result = top5.map(({ userId, name, ratingAvg, ratingCount, totalScore, distanceMeters}) => ({
         userId,
         name,
         ratingAvg,
         ratingCount,
         totalScore,
-        distanceMeters,
-        proximityScore,
-        ratingAvgScore,
-        ratingCountScore,
-        totalRatedOrders
+        distanceMeters
       }));
-      console.log(result)
       // Успешный ответ
       res.status(200).json(result);
     } catch (error) {

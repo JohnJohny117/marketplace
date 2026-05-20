@@ -6,6 +6,7 @@ function validateSession(...allowedRoles) {
   return async (req, res, next) => {
     try {
       const { sessionId } = req.params;
+      // const sessionId = req.cookies.sessionId;
       let session;
 
       // Пытаемся найти сессию, обрабатывая возможную ошибку формата UUID

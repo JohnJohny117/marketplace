@@ -33,8 +33,7 @@ function validateOrderInput(req, res, next) {
 }
 
 
-// middleware для поиска заказа и проверки статуса
-const findOrderAndCheck = (expectedStatus) => async (req, res, next) => {
+const findOrderAndCheck = (expectedStatus, ownerField) => async (req, res, next) => {
   try {
     const { orderId } = req.params;
     const order = await Order.findByPk(orderId);
@@ -44,7 +43,10 @@ const findOrderAndCheck = (expectedStatus) => async (req, res, next) => {
     if (order.status !== expectedStatus) {
       return res.status(400).json({ error: `Заказ должен иметь статус "${expectedStatus}"` });
     }
-    // Сохраняем заказ в запросе для дальнейшего использования
+    // Проверка владельца, если поле указано
+    if (ownerField && order[ownerField] !== req.session.userId) {
+      return res.status(403).json({ error: 'Нет доступа к этому заказу' });
+    }
     req.order = order;
     next();
   } catch (error) {

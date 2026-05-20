@@ -26,12 +26,12 @@ module.exports = (sequelize, DataTypes) => {
       },
       longitude: {
         //долгота
-        type: DataTypes.REAL, // вещественное число
+        type: DataTypes.DOUBLE, // вещественное число
         allowNull: true, // может быть NULL
       },
       latitude: {
         //широта
-        type: DataTypes.REAL, // вещественное число
+        type: DataTypes.DOUBLE, // вещественное число
         allowNull: true, // может быть NULL
       },
       phone: {

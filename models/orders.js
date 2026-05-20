@@ -52,8 +52,8 @@ module.exports = (sequelize, DataTypes) => {
       },
       score: {
         type: DataTypes.INTEGER, // целое число
-        allowNull: false, // не может быть NULL
-        defaultValue: 0, // по умолчанию 0
+        allowNull: true, // не может быть NULL
+        defaultValue: null, // по умолчанию NULL
       },
       review: {
         type: DataTypes.TEXT, // текстовый тип
